@@ -1,0 +1,76 @@
+---
+title: "Using Machine Learning to Predict Activity Types from Biometric Data"
+author: "Onna Nelson (wugology)"
+date: "February 20, 2015"
+output: html_document
+---
+
+###Introduction
+This project uses [Human Activity Recognition](http://groupware.les.inf.puc-rio.br/har) data. This data measures various aspects of belt, forearm, arm, and dumbell and includes five classes of activity: sitting-down, standing-up, standing, walking, and sitting. Measurements of belt, forearm, arm, and dumbell will be used to predict the class of activity.
+
+###Loading and Processing the Data
+First, relevant R packages must be loaded:
+```{r}
+library(randomForest); library(caret); library(e1071)
+```
+
+Next, a training set (which includes class activities) and a test set (for which we will predict the class of activity), are loaded. All blank cells are conveted to NA values.
+
+```{r}
+train  <- read.csv("pml-training.csv", header=TRUE, na.strings = c("", " ","NA"))
+test  <- read.csv("pml-testing.csv", header=TRUE, na.strings = c("", " ","NA"))
+```
+
+Since many columns contain NA data, we'll get rid of columns where at least half the rows in the training set are NAs:
+
+```{r}
+train2 <- train[,colSums(is.na(train)) < .5*nrow(train)]
+test2 <- test[,colSums(is.na(train)) < .5*nrow(train)]
+```
+
+This reduced the number of columns from 160 to 60. We'll also remove the first 7 columns, as they only contain metadata:
+```{r}
+train3 <- train2[,-c(1:7)]
+test3 <- test2[,-c(1:7)]
+```
+
+This reduces the number of columns to 53, a much more manageable data set. Finally, we'll make all values numeric, except for the categorical data we want to predict:
+
+```{r}
+for (i in 1:52){
+   train3[,i] <- as.numeric(train3[,i])
+   test3[,i] <- as.numeric(test3[,i])   
+}
+```
+
+###Modeling the data
+Next, we'll set the seed (for reproducible randomness) and randomly divide the training set into two subsets. The first subset will be for training the model, while the second set will be to check for accuracy.
+```{r}
+set.seed(321)
+subTrain <- createDataPartition(y = train3$classe,
+                               p = .8,
+                               list = FALSE)
+
+training <- train3[subTrain,]
+testing <- train3[-subTrain,]
+```
+
+We'll create a random forest model:
+```{r}
+rf_model <- randomForest(classe~.,data=training, ntree=250, importance=TRUE)
+```
+
+###Predicting the data
+Next, we use the model to predict values:
+```{r}
+predTrain <- predict(rf_model,testing); predAcc <- predTrain==testing$classe
+table(predTrain,testing$classe)
+prop.table(table(predAcc))
+```
+As we can see, this model is 99.5% accurate. This is a high degree of accuracy, without overfitting the model (at 100% accuracy). We'll move on to predict the test set:
+
+```{r}
+predTest <- predict(rf_model,newdata=test3)
+table(predTest)
+```
+The model predicted several different values, as expected.
